@@ -1,0 +1,81 @@
+version: "3.8"
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  traefik_public:
+    external: true  # Usa la red de Traefik ya existente
+  general_network:
+    external: true  # Red interna para los servicios de monitoreo
+
+services:
+  grafana:
+    image: grafana/grafana:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.grafana.rule=Host(`monitor1.tudominio.com`)"
+        - "traefik.http.routers.grafana.entrypoints=websecure"
+        - "traefik.http.routers.grafana.tls=true"
+        - "traefik.http.routers.grafana.tls.certresolver=le"
+        - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - traefik_public
+      - general_network
+
+  prometheus:
+    image: prom/prometheus:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    volumes:
+      - /etc/prometheus:/etc/prometheus
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - general_network
+    ports:
+      - "9090:9090"  # Mapeamos para acceso interno
+
+  node_exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    deploy:
+      mode: global
+      restart_policy:
+        condition: any
+    command:
+      - '--path.rootfs=/host'
+    volumes:
+      - '/:/host:ro,rslave'
+    networks:
+      - general_network
+    ports:
+      - "9100:9100"  # Puerto para monitoreo interno
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    
+    networks:
+      - general_network
+    ports:
+      - "8080:8080"  # Puerto interno para cAdvisor
