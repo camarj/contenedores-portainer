@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  duplicati:
+    image: lscr.io/linuxserver/duplicati:latest
+    container_name: duplicati
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - SETTINGS_ENCRYPTION_KEY=tu_clave_aquí
+      - CLI_ARGS=
+      - DUPLICATI__WEBSERVICE_PASSWORD=tu_contraseña_aquí
+    volumes:
+      - duplicati_config:/config
+      # - duplicati_backups:/backups
+      - /var/lib/docker/volumes:/source/docker-volumes
+    cap_add:
+      - DAC_READ_SEARCH
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.duplicati.rule=Host(`duplicati-main1.intelliaa.com`)
+        - traefik.http.routers.duplicati.entrypoints=websecure
+        - traefik.http.routers.duplicati.tls.certresolver=le
+        - traefik.http.services.duplicati.loadbalancer.server.port=8200
+    networks:
+      - traefik_public
+      - general_network
+    restart: unless-stopped
+
+volumes:
+  duplicati_config:
+  # duplicati_backups:
+
+networks:
+  traefik_public:
+    external: true
+  general_network:
+    external: true
